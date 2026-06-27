@@ -196,8 +196,14 @@ def ayarlar_getir():
         ayar["id"] = str(ayar["_id"])
         del ayar["_id"]
         return ayar
-    # Eğer henüz ayar girilmemişse boş site çökmesin diye varsayılan döner
+    # Henüz ayar girilmemişse varsayılan değerler
     return {
+        "ana_baslik_tr": "Lezzet Sanatına Hoşgeldiniz",
+        "ana_baslik_en": "Welcome to the Art of Taste",
+        "ana_baslik_nl": "Welkom bij de Smaakkunst",
+        "alt_baslik_tr": "Özel günleriniz için özenle hazırlanan eşsiz tatlar.",
+        "alt_baslik_en": "Unique flavors for your special days.",
+        "alt_baslik_nl": "Unieke smaken voor uw speciale dagen.",
         "hakkimda_tr": "Lütfen admin panelinden hakkımda yazısını güncelleyin.",
         "hakkimda_en": "Please update about text from admin panel.",
         "hakkimda_nl": "Werk over mij-tekst bij via beheerderspaneel.",
@@ -206,10 +212,9 @@ def ayarlar_getir():
 
 @app.put("/admin/ayarlar")
 def ayarlar_guncelle(guncel_ayarlar: AyarlarSemasi):
-    # Veritabanında her zaman tek 1 satır ayar kaydı olacağı için filtreyi boş {} bırakıyoruz
     ayarlar_koleksiyonu.update_one(
         {}, 
         {"$set": guncel_ayarlar.model_dump()},
-        upsert=True # Kayıt yoksa yeni oluşturur, varsa üstüne yazar (yer kaplamaz)
+        upsert=True
     )
     return {"durum": "Başarılı", "mesaj": "Ayarlar başarıyla güncellendi."}
