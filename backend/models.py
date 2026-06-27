@@ -25,3 +25,9 @@ class MenuKartiSemasi(BaseModel):
 class FotografSiraSemasi(BaseModel):
     bolum: str  # Fotoğrafın yeri (Örn: "slider" veya "biz_kimiz")
     sira: int  # Slider'daki gösterim sırası (1, 2, 3 vb.)
+
+class AyarlarSemasi(BaseModel):
+    hakkimda_tr: str
+    hakkimda_en: str
+    hakkimda_nl: str
+    telefon: str
