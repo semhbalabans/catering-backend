@@ -1,9 +1,12 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from bson import ObjectId  # MongoDB ID'lerini işlemek için gerekli
 import os
-import shutil
+
+# Cloudinary importları
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
 
 # Model ve Veritabanı importlarımız (Yeni eklenen tablolar ve şemalar dahil edildi)
 from backend.models import SiparisSemasi, MenuKartiSemasi
@@ -19,8 +22,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Yüklenen fotoğrafların kaydedileceği klasörün var olduğundan emin oluyoruz
-os.makedirs("uploads", exist_ok=True)
+# --- CLOUDINARY AYARLARI ---
+# Render üzerindeki Environment Variables'dan (Çevre Değişkenleri) şifreleri alıyoruz
+cloudinary.config(
+  cloud_name = os.environ.get("CLOUDINARY_CLOUD_NAME"),
+  api_key = os.environ.get("CLOUDINARY_API_KEY"),
+  api_secret = os.environ.get("CLOUDINARY_API_SECRET"),
+  secure = True
+)
 
 
 @app.get("/")
@@ -29,7 +38,7 @@ def read_root():
 
 
 # ==========================================
-# 1. SİPARİŞ YÖNETİMİ (Mevcut Kodlar)
+# 1. SİPARİŞ YÖNETİMİ
 # ==========================================
 
 @app.post("/siparisler")
@@ -76,7 +85,7 @@ def siparis_duzenle(siparis_id: str, guncel_veri: SiparisSemasi):
 
 
 # ==========================================
-# 2. MENÜ YÖNETİMİ (YENİ EKLENEN KISIM)
+# 2. MENÜ YÖNETİMİ
 # ==========================================
 
 @app.post("/admin/menuler")
@@ -108,7 +117,7 @@ def menu_sil(menu_id: str):
 
 
 # ==========================================
-# 3. GALERİ / FOTOĞRAF YÖNETİMİ (YENİ EKLENEN KISIM)
+# 3. GALERİ / FOTOĞRAF YÖNETİMİ (CLOUDINARY ENTEGRELİ)
 # ==========================================
 
 @app.post("/admin/fotograflar")
@@ -119,31 +128,32 @@ def fotograf_yukle(bolum: str = Form(...), sira: int = Form(1), dosya: UploadFil
         if mevcut:
             raise HTTPException(status_code=400, detail=f"{sira}. sıra dolu! Lütfen başka numara seçin.")
 
-    # 2. KONTROL: Eğer 'biz_kimiz' ise, eski fotoğrafı bul ve tamamen sil
+    # 2. KONTROL: Eğer 'biz_kimiz' ise, eski fotoğrafı bul ve hem DB'den hem Cloudinary'den sil
     elif bolum == "biz_kimiz":
         eski = fotograflar_koleksiyonu.find_one({"bolum": "biz_kimiz"})
         if eski:
-            eski_yol = f"uploads/{eski['dosya_adi']}"
-            if os.path.exists(eski_yol):
-                os.remove(eski_yol)
+            if "public_id" in eski:
+                cloudinary.uploader.destroy(eski["public_id"])
             fotograflar_koleksiyonu.delete_one({"_id": eski["_id"]})
         sira = 1  # Biz kimiz fotoğrafının sırası her zaman 1'dir
 
-    # Dosyayı kaydetme işlemi
-    dosya_yolu = f"uploads/{dosya.filename}"
-    with open(dosya_yolu, "wb") as buffer:
-        import shutil
-        shutil.copyfileobj(dosya.file, buffer)
+    try:
+        # Dosyayı Cloudinary'ye yüklüyoruz
+        upload_result = cloudinary.uploader.upload(dosya.file, folder="catering_app")
+        
+        foto_veri = {
+            "dosya_adi": dosya.filename,
+            "bolum": bolum,
+            "sira": sira,
+            "url": upload_result.get("secure_url"), # Cloudinary'den dönen güvenli (https) tam link
+            "public_id": upload_result.get("public_id") # İleride silmek için gereken Cloudinary ID'si
+        }
 
-    foto_veri = {
-        "dosya_adi": dosya.filename,
-        "bolum": bolum,
-        "sira": sira,
-        "url": f"/uploads/{dosya.filename}"
-    }
-
-    sonuc = fotograflar_koleksiyonu.insert_one(foto_veri)
-    return {"durum": "Başarılı", "mesaj": "Fotoğraf yüklendi", "foto_id": str(sonuc.inserted_id)}
+        sonuc = fotograflar_koleksiyonu.insert_one(foto_veri)
+        return {"durum": "Başarılı", "mesaj": "Fotoğraf başarıyla yüklendi", "foto_id": str(sonuc.inserted_id)}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fotoğraf yüklenemedi: {str(e)}")
 
 
 @app.get("/fotograflar")
@@ -164,10 +174,9 @@ def fotograf_sil(foto_id: str):
         if not foto:
             raise HTTPException(status_code=404, detail="Fotoğraf bulunamadı.")
 
-        # 1. Önce fiziksel dosyayı bilgisayardan (uploads klasöründen) siliyoruz
-        dosya_yolu = f"uploads/{foto['dosya_adi']}"
-        if os.path.exists(dosya_yolu):
-            os.remove(dosya_yolu)
+        # 1. Önce Cloudinary sunucularından resmi siliyoruz
+        if "public_id" in foto:
+            cloudinary.uploader.destroy(foto["public_id"])
 
         # 2. Sonra veritabanındaki kaydını siliyoruz
         fotograflar_koleksiyonu.delete_one({"_id": ObjectId(foto_id)})
@@ -175,12 +184,3 @@ def fotograf_sil(foto_id: str):
         return {"durum": "Başarılı", "mesaj": "Fotoğraf tamamen silindi."}
     except Exception:
         raise HTTPException(status_code=400, detail="Geçersiz format.")
-
-
-# Müşteri sitesinin yüklenen resimleri görüntüleyebilmesi için gerekli kapı
-@app.get("/uploads/{dosya_adi}")
-def resim_goster(dosya_adi: str):
-    dosya_yolu = f"uploads/{dosya_adi}"
-    if os.path.exists(dosya_yolu):
-        return FileResponse(dosya_yolu)
-    raise HTTPException(status_code=404, detail="Resim bulunamadı.")
