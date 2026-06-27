@@ -27,6 +27,12 @@ class FotografSiraSemasi(BaseModel):
     sira: int  # Slider'daki gösterim sırası (1, 2, 3 vb.)
 
 class AyarlarSemasi(BaseModel):
+    ana_baslik_tr: str
+    ana_baslik_en: str
+    ana_baslik_nl: str
+    alt_baslik_tr: str
+    alt_baslik_en: str
+    alt_baslik_nl: str
     hakkimda_tr: str
     hakkimda_en: str
     hakkimda_nl: str
