@@ -14,8 +14,11 @@ db = client["catering_db"]
 # 1. Siparişlerin tutulacağı tablo
 siparisler_koleksiyonu = db["siparisler"]
 
-# 2. YENİ: Adminin oluşturacağı menü kartlarının tutulacağı tablo
+# 2. Adminin oluşturacağı menü kartlarının tutulacağı tablo
 menuler_koleksiyonu = db["menuler"]
 
-# 3. YENİ: Slider ve 'Biz Kimiz' fotoğraflarının tutulacağı tablo
+# 3. Slider ve 'Biz Kimiz' fotoğraflarının tutulacağı tablo
 fotograflar_koleksiyonu = db["fotograflar"]
+
+# 4. YENİ: Dinamik site ayarlarının (Hakkımda yazısı, Telefon) tutulacağı tablo
+ayarlar_koleksiyonu = db["ayarlar"]
