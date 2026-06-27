@@ -9,8 +9,8 @@ import cloudinary.uploader
 import cloudinary.api
 
 # Model ve Veritabanı importlarımız (Yeni eklenen tablolar ve şemalar dahil edildi)
-from backend.models import SiparisSemasi, MenuKartiSemasi
-from backend.database import siparisler_koleksiyonu, menuler_koleksiyonu, fotograflar_koleksiyonu
+from backend.models import SiparisSemasi, MenuKartiSemasi, AyarlarSemasi
+from backend.database import siparisler_koleksiyonu, menuler_koleksiyonu, fotograflar_koleksiyonu, ayarlar_koleksiyonu
 
 app = FastAPI(title="Catering API")
 
@@ -184,3 +184,32 @@ def fotograf_sil(foto_id: str):
         return {"durum": "Başarılı", "mesaj": "Fotoğraf tamamen silindi."}
     except Exception:
         raise HTTPException(status_code=400, detail="Geçersiz format.")
+
+# ==========================================
+# 4. SİTE AYARLARI (DİNAMİK METİNLER)
+# ==========================================
+
+@app.get("/ayarlar")
+def ayarlar_getir():
+    ayar = ayarlar_koleksiyonu.find_one({})
+    if ayar:
+        ayar["id"] = str(ayar["_id"])
+        del ayar["_id"]
+        return ayar
+    # Eğer henüz ayar girilmemişse boş site çökmesin diye varsayılan döner
+    return {
+        "hakkimda_tr": "Lütfen admin panelinden hakkımda yazısını güncelleyin.",
+        "hakkimda_en": "Please update about text from admin panel.",
+        "hakkimda_nl": "Werk over mij-tekst bij via beheerderspaneel.",
+        "telefon": "+31 6 00000000"
+    }
+
+@app.put("/admin/ayarlar")
+def ayarlar_guncelle(guncel_ayarlar: AyarlarSemasi):
+    # Veritabanında her zaman tek 1 satır ayar kaydı olacağı için filtreyi boş {} bırakıyoruz
+    ayarlar_koleksiyonu.update_one(
+        {}, 
+        {"$set": guncel_ayarlar.model_dump()},
+        upsert=True # Kayıt yoksa yeni oluşturur, varsa üstüne yazar (yer kaplamaz)
+    )
+    return {"durum": "Başarılı", "mesaj": "Ayarlar başarıyla güncellendi."}
